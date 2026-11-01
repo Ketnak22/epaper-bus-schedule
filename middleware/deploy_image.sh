@@ -5,7 +5,7 @@ set -euo pipefail
 
 # Config
 REMOTE_USER="root"
-REMOTE_HOST="192.168.1.203"
+REMOTE_HOST="192.168.33.203"
 REMOTE_PATH="/tmp"
 IMAGE_NAME="bus-stop-middleware:latest"
 TAR_NAME="bus-stop-middleware_latest.tar.gz"
