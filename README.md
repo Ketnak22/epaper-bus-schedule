@@ -1,7 +1,14 @@
-# Wemos D1 mini E-Paper Bus Schedule
+# E-Paper Bus Schedule
+
+<!-- TODO: add photo -->
+![The device](docs/photo.jpg)
 
 Shows the next three departures from a Warsaw public transport stop on a
 4.2" e-paper display. A rotary encoder switches between stops and platforms.
+The data comes from the planned ZTM timetable, so delays are not taken into
+account, and the server keeps it in a cache for an hour.
+
+Status: working prototype, enclosure planned.
 
 The ESP8266 doesn't talk to the ZTM API directly. A small FastAPI service in
 [middleware/](middleware/) downloads the timetable, sorts it and sends the
@@ -15,6 +22,12 @@ before for this project) don't have enough RAM to process the timetable of a
 busy stop. The closer to the city centre, the more departures a stop has, and
 the full response is too big to parse on the device. So the heavy work is
 moved to a server, and the microcontroller only gets a short, ready list.
+
+```mermaid
+flowchart LR
+    A[ESP8266] -->|HTTP| B[middleware]
+    B -->|HTTPS| C[ZTM API]
+```
 
 ## Hardware
 
@@ -53,9 +66,21 @@ pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-To run it on another machine, set the host in `deploy_image.sh` and run the
-script. It copies the image and loads it into Docker there, but doesn't start
-the container. `.env` is copied into the image.
+To run it on another machine, set `REMOTE_HOST` to its address and run
+`deploy_image.sh`. It copies the image and loads it into Docker there, but
+doesn't start the container. `.env` is not part of the image, so keep it on that
+machine and pass it in:
+
+```sh
+docker run --env-file .env -p 8000:8000 bus-stop-middleware:latest
+```
+
+With `MOCK=1` in `.env` the server returns sample departures and needs no API
+key, so you can try it without the device:
+
+```sh
+curl "localhost:8000/get_stop_schedule?busStopId=7009&busStopNr=01&currentTimeInMinutes=600"
+```
 
 ### Firmware
 
@@ -65,6 +90,17 @@ pio run --target upload
 ```
 
 The stops are listed in `busStops` in `src/main.cpp`.
+
+### Adding a stop
+
+Find the stop in the `dbtimetable_get` resource on
+[api.um.warszawa.pl](https://api.um.warszawa.pl). It gives the stop ID
+(`busStopId`) and the platform numbers (`busStopNr`, like `01`). Add an entry to
+`busStops` and raise the size of the `std::array` by one:
+
+```cpp
+{"1234", {"01", "02"}, "Stop name"},
+```
 
 ## Controls
 
@@ -85,3 +121,6 @@ In stop selection:
 
 Departures load about a second after the encoder stops turning. The last
 stop and number are saved in flash and come back after a restart.
+
+The middleware has no authentication and is meant for a local network, so
+don't expose it to the internet.
