@@ -226,17 +226,20 @@ void enterDeepSleep() {
     do {
         display.fillScreen(GxEPD_WHITE);
     } while (display.nextPage());
-    display.powerOff();
+    display.hibernate();
 
     // Wait for button release
     Serial.println("Waiting for button release...");
     while(digitalRead(RT_SW) == 0) {
         delay(50);
     }
-    
+    // Let the contacts settle so release bounce doesn't wake us right away
+    delay(BUTTON_DEBOUNCE_MS);
+
     Serial.println("Entering Deep Sleep.");
     Serial.flush(); 
     
+    esp_deep_sleep_enable_gpio_wakeup(1ULL << RT_SW, ESP_GPIO_WAKEUP_GPIO_LOW);
     esp_deep_sleep_start();
 }
 
@@ -263,7 +266,7 @@ void refreshLogic() {
   } 
   refreshCounter++;
   if (refreshCounter >= FULL_REFRESH_THRESHOLD) {
-      drawBackground(true, false);
+      drawBackground(true, changeStopMode);
       refreshCounter = 0;
   }
   std::vector<ScheduleEntry> displayList = convertScheduleTimesToMinutesLeft(globalSchedules);
@@ -292,7 +295,7 @@ void drawBackground(bool isFullRefresh, bool isChangingBusStop) {
     // Display bus stop name
     u8g2.setForegroundColor(GxEPD_BLACK);
     u8g2.setFont(u8g2_font_helvB18_te);
-    displayTextOnCenterHorizontally(isChangingBusStop ? "< " + busStops[changingBusStop].name + " >" : busStops[changingBusStop].name + " " + busStops[changingBusStop].nr[currentBusStopNrIndex], BUS_STOP_NAME_Y_OFFSET);
+    displayTextOnCenterHorizontally(isChangingBusStop ? "< " + busStops[changingBusStop].name + " >" : busStops[currentBusStop].name + " " + busStops[currentBusStop].nr[currentBusStopNrIndex], BUS_STOP_NAME_Y_OFFSET);
 
     int lineY = (int)(1.5 * BUS_STOP_NAME_Y_OFFSET);
     display.drawLine(X_MARGIN, lineY, display.width() - X_MARGIN, lineY, GxEPD_BLACK);
@@ -384,7 +387,10 @@ void displayBusStopSchedule(const int y, const std::vector<ScheduleEntry> &sched
     
     String pD = entry.direction;
     while (pD.length() > 0 && u8g2.getUTF8Width((pD + "...").c_str()) > maxW) {
-       pD.remove(pD.length() - 1);
+       // Drop a whole UTF-8 character, not just its last byte
+       int last = pD.length() - 1;
+       while (last > 0 && (pD[last] & 0xC0) == 0x80) last--;
+       pD.remove(last);
     }
     if (pD != entry.direction) pD += "...";
     
