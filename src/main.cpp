@@ -82,15 +82,24 @@ int refreshCounter = 0;
 const unsigned long REFRESH_INTERVAL_MS = 60000; 
 unsigned long previousRefreshMillis = 0;
 
+const unsigned long NR_CHANGE_FETCH_DELAY_MS = 1000;
+bool fetchPending = false;
+const char *LOADING_TEXT = "Ładowanie danych...";
+bool loadingMessageShown = false;
+unsigned long lastNrChangeMillis = 0;
+
 // Declarations
 void connectToWifi(bool silent);
 void syncTime(bool silent);
-void drawBackground(bool isFullRefresh, bool isChangingBusStop);
+void drawBackground(bool isFullRefresh, bool isChangingBusStop, bool clearSchedules = false);
+void drawSchedulesMessage(const String &text);
+void showSchedulesMessage(const String &text);
 void displayBusStopSchedule(const int y, const std::vector<ScheduleEntry> &schedules);
 void displayTextOnCenterHorizontally(const String &text, const int y);
 void displayTextOnCenter(const String &text);
 void showStatusMessage(const String &text);
 void refreshLogic();
+int wrapIndex(int index, long steps, int size);
 void confirmBusStopChange();
 void enterDeepSleep(); // Logic to turn off
 
@@ -156,65 +165,58 @@ void loop() {
 
     // Ignore if duration was long enough to trigger deep sleep
     if (duration <= 6000) {
-      
-      // 1s - 6s
-      if (duration >= 1000) {
-         if (changeStopMode) {
-           confirmBusStopChange();
-         } else {
-           // Enter Change Mode
-           changeStopMode = true;
-           changingBusStop = currentBusStop;
-           drawBackground(false, true);
-         }
-      }
-      // < 1s
-      else {
-        if (changeStopMode) {
-           // If in Change Mode: Short click CONFIRMS selection
-           confirmBusStopChange();
-        } else {
-           currentBusStopNrIndex++;
-           if (currentBusStopNrIndex >= busStops[currentBusStop].nr.size()) {
-             currentBusStopNrIndex = 0;
-           }
-           
-           // Clear data and refresh
-           globalSchedules.clear();
-          //  showStatusMessage("Zmiana numeru...");
-           drawBackground(false, false);
-           refreshLogic();
-        }
+      if (changeStopMode) {
+        confirmBusStopChange();
+      } else {
+        // Enter Change Mode
+        changeStopMode = true;
+        changingBusStop = currentBusStop;
+        drawBackground(false, true);
       }
     }
   }
 
   // Encoder Rotation Logic
-  long newPosition = encoder.read() / 4;
-  if (changeStopMode) {
-    if (newPosition != prevEncoderPos) {
-      // Move by the whole difference, detents add up while the display redraws
-      int stopCount = busStops.size();
-      int steps = (newPosition - prevEncoderPos) % stopCount;
-      changingBusStop = (changingBusStop + steps + stopCount) % stopCount;
+  // Negated, so turning clockwise moves forward
+  long newPosition = -(encoder.read() / 4);
+  if (newPosition != prevEncoderPos) {
+    long steps = newPosition - prevEncoderPos;
+    prevEncoderPos = newPosition;
 
+    if (changeStopMode) {
+      changingBusStop = wrapIndex(changingBusStop, steps, busStops.size());
       Serial.printf("Encoder position: %d. New stop: %s\n", (int)newPosition, busStops[changingBusStop].name.c_str());
-      prevEncoderPos = newPosition;
-      
+
       // Update display with new candidate name
       drawBackground(false, true);
+    } else {
+      currentBusStopNrIndex = wrapIndex(currentBusStopNrIndex, steps, busStops[currentBusStop].nr.size());
+
+      // Clear data and refresh
+      globalSchedules.clear();
+      drawBackground(false, false, true);
+      fetchPending = true;
+      lastNrChangeMillis = millis();
     }
-  } else {
-    // Keep encoder position synced even if not in change mode to prevent jumps
-    prevEncoderPos = newPosition;
+  }
+
+  // Fetch once the encoder stops turning, not for every stop number on the way
+  if (fetchPending && millis() - lastNrChangeMillis >= NR_CHANGE_FETCH_DELAY_MS) {
+    refreshLogic();
   }
 
   // Automatic Timer Refresh
   unsigned long currentMillis = millis();
-  if (currentMillis - previousRefreshMillis >= REFRESH_INTERVAL_MS) {
+  if (!fetchPending && currentMillis - previousRefreshMillis >= REFRESH_INTERVAL_MS) {
     previousRefreshMillis = currentMillis; 
     refreshLogic();
   }
+}
+
+// Move through a looping list by the whole difference,
+// detents add up while the display redraws
+int wrapIndex(int index, long steps, int size) {
+  return (index + steps % size + size) % size;
 }
 
 // Exit Change Mode (Save & Refresh)
@@ -223,7 +225,7 @@ void confirmBusStopChange() {
   currentBusStop = changingBusStop;
   globalSchedules.clear();
   currentBusStopNrIndex = 0;
-  drawBackground(false, false);
+  drawBackground(false, false, true);
   refreshLogic();
 }
 
@@ -254,6 +256,7 @@ void enterDeepSleep() {
 }
 
 void refreshLogic() {
+  fetchPending = false;
   Serial.println("--- Starting Scheduled Refresh ---");
   struct tm timeinfo;
   bool timeValid = getLocalTime(&timeinfo, 0);
@@ -266,6 +269,8 @@ void refreshLogic() {
   removePastSchedules(globalSchedules);
   bool fetchFailed = false;
   if (globalSchedules.size() <= 3) {
+      // Nothing to show meanwhile, otherwise the old list stays until the fetch is done
+      if (globalSchedules.empty() && !loadingMessageShown) showSchedulesMessage(LOADING_TEXT);
       connectToWifi(true);
       syncTime(true);
       std::vector<ScheduleEntry> freshData;
@@ -286,18 +291,37 @@ void refreshLogic() {
   do {
     display.fillScreen(GxEPD_WHITE);
     if (displayList.empty()) {
-       u8g2.setFont(u8g2_font_helvB18_te);
-       displayTextOnCenterHorizontally(fetchFailed ? "Brak połączenia" : "Brak odjazdów", schedulesY + 50);
+       drawSchedulesMessage(fetchFailed ? "Brak połączenia" : "Brak odjazdów");
     } else {
        displayBusStopSchedule(schedulesY, displayList);
     }
   } while (display.nextPage());
   display.hibernate();
+  loadingMessageShown = false;
 }
 
-void drawBackground(bool isFullRefresh, bool isChangingBusStop) {
+// Message in the place of the departures table, call it inside a page loop
+void drawSchedulesMessage(const String &text) {
+  u8g2.setForegroundColor(GxEPD_BLACK);
+  u8g2.setFont(u8g2_font_helvB18_te);
+  displayTextOnCenterHorizontally(text, schedulesY + 50);
+}
+
+void showSchedulesMessage(const String &text) {
+  display.setPartialWindow(0, secondLineY + 1, display.width(), display.height() - secondLineY - 1);
+  display.firstPage();
+  do {
+    display.fillScreen(GxEPD_WHITE);
+    drawSchedulesMessage(text);
+  } while (display.nextPage());
+  loadingMessageShown = true;
+}
+
+// clearSchedules also blanks the departures area, for a freshly changed stop
+void drawBackground(bool isFullRefresh, bool isChangingBusStop, bool clearSchedules) {
   if (isFullRefresh) display.setFullWindow();
-  else display.setPartialWindow(0, 0, display.width(), 100); 
+  else if (clearSchedules) display.setPartialWindow(0, 0, display.width(), display.height());
+  else display.setPartialWindow(0, 0, display.width(), 100);
   display.firstPage();
   do {
     display.fillScreen(GxEPD_WHITE);
@@ -322,7 +346,10 @@ void drawBackground(bool isFullRefresh, bool isChangingBusStop) {
     u8g2.setCursor(display.width() - X_MARGIN - w, headerY);
     u8g2.print("Odjazd");
     schedulesY = secondLineY + 45;
+    // The departures were blanked because a fetch follows
+    if (clearSchedules) drawSchedulesMessage(LOADING_TEXT);
   } while (display.nextPage());
+  loadingMessageShown = clearSchedules;
 }
 
 void connectToWifi(bool silent) {
