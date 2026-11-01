@@ -3,6 +3,7 @@
 #include <array>
 #include <ESP8266WiFi.h>
 #include <coredecls.h>
+#include <EEPROM.h>
 #include <time.h>
 #include <Encoder.h>
 #include <ezButton.h>
@@ -52,6 +53,12 @@ uint8_t currentBusStopNrIndex = 0;
 bool changeStopMode = false;
 uint8_t changingBusStop = 0;
 String changingBusStopName = "";
+const unsigned long CHANGE_MODE_TIMEOUT_MS = 10000;
+unsigned long lastChangeModeActivityMillis = 0;
+
+// Saved stop layout in EEPROM: marker, stop index, stop number index
+static const size_t SAVED_STOP_SIZE = 3;
+static const uint8_t SAVED_STOP_MARKER = 0xB5;
 
 const int FULL_REFRESH_THRESHOLD = 60; 
 
@@ -101,6 +108,9 @@ void showStatusMessage(const String &text);
 void refreshLogic();
 int wrapIndex(int index, long steps, int size);
 void confirmBusStopChange();
+void cancelBusStopChange();
+void loadSavedBusStop();
+void saveBusStop();
 void enterDeepSleep(); // Logic to turn off
 
 void setup() {
@@ -114,6 +124,8 @@ void setup() {
   pinMode(RT_SW, INPUT_PULLUP);
 
   encoderBtn.setDebounceTime(BUTTON_DEBOUNCE_MS);
+
+  loadSavedBusStop();
 
   // 0 keeps GxEPD2 from reopening Serial with RX
   display.init(0, true, 50, false);
@@ -166,12 +178,15 @@ void loop() {
     // Ignore if duration was long enough to trigger deep sleep
     if (duration <= 6000) {
       if (changeStopMode) {
-        confirmBusStopChange();
+        // In Change Mode: Short click confirms, holding cancels
+        if (duration >= 1000) cancelBusStopChange();
+        else confirmBusStopChange();
       } else {
         // Enter Change Mode
         changeStopMode = true;
         changingBusStop = currentBusStop;
         drawBackground(false, true);
+        lastChangeModeActivityMillis = millis();
       }
     }
   }
@@ -189,6 +204,7 @@ void loop() {
 
       // Update display with new candidate name
       drawBackground(false, true);
+      lastChangeModeActivityMillis = millis();
     } else {
       currentBusStopNrIndex = wrapIndex(currentBusStopNrIndex, steps, busStops[currentBusStop].nr.size());
 
@@ -200,8 +216,14 @@ void loop() {
     }
   }
 
+  // Leave Change Mode when abandoned, unless the button is still held down
+  if (changeStopMode && buttonPressStart == 0 && millis() - lastChangeModeActivityMillis >= CHANGE_MODE_TIMEOUT_MS) {
+    cancelBusStopChange();
+  }
+
   // Fetch once the encoder stops turning, not for every stop number on the way
   if (fetchPending && millis() - lastNrChangeMillis >= NR_CHANGE_FETCH_DELAY_MS) {
+    saveBusStop();
     refreshLogic();
   }
 
@@ -225,8 +247,36 @@ void confirmBusStopChange() {
   currentBusStop = changingBusStop;
   globalSchedules.clear();
   currentBusStopNrIndex = 0;
+  saveBusStop();
   drawBackground(false, false, true);
   refreshLogic();
+}
+
+void loadSavedBusStop() {
+  EEPROM.begin(SAVED_STOP_SIZE);
+  if (EEPROM.read(0) != SAVED_STOP_MARKER) return;
+
+  // The list may have changed since the save
+  uint8_t savedStop = EEPROM.read(1);
+  uint8_t savedNrIndex = EEPROM.read(2);
+  if (savedStop >= busStops.size() || savedNrIndex >= busStops[savedStop].nr.size()) return;
+
+  currentBusStop = savedStop;
+  currentBusStopNrIndex = savedNrIndex;
+}
+
+// Only touches the flash if something actually changed
+void saveBusStop() {
+  EEPROM.write(0, SAVED_STOP_MARKER);
+  EEPROM.write(1, currentBusStop);
+  EEPROM.write(2, currentBusStopNrIndex);
+  EEPROM.commit();
+}
+
+// Exit Change Mode (Keep the current stop)
+void cancelBusStopChange() {
+  changeStopMode = false;
+  drawBackground(false, false);
 }
 
 void enterDeepSleep() {
