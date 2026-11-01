@@ -108,8 +108,8 @@ void setup() {
   syncTime(false);
 
   showStatusMessage("Pobieranie danych...");
-  globalSchedules = fetchScheduleFromServer(busStops[currentBusStop].id, busStops[currentBusStop].nr[currentBusStopNrIndex]);
-  
+  fetchScheduleFromServer(busStops[currentBusStop].id, busStops[currentBusStop].nr[currentBusStopNrIndex], globalSchedules);
+
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
 
@@ -244,20 +244,21 @@ void enterDeepSleep() {
 void refreshLogic() {
   Serial.println("--- Starting Scheduled Refresh ---");
   struct tm timeinfo;
-  bool timeValid = getLocalTime(&timeinfo);
+  bool timeValid = getLocalTime(&timeinfo, 0);
   if (!timeValid) {
       connectToWifi(true);
       syncTime(true);
       WiFi.disconnect(true);
       WiFi.mode(WIFI_OFF);
-      getLocalTime(&timeinfo);
   }
   removePastSchedules(globalSchedules);
+  bool fetchFailed = false;
   if (globalSchedules.size() <= 3) {
       connectToWifi(true);
-      syncTime(true); 
-      std::vector<ScheduleEntry> freshData = fetchScheduleFromServer(busStops[currentBusStop].id, busStops[currentBusStop].nr[currentBusStopNrIndex]);
-      if (!freshData.empty()) globalSchedules = freshData;
+      syncTime(true);
+      std::vector<ScheduleEntry> freshData;
+      fetchFailed = !fetchScheduleFromServer(busStops[currentBusStop].id, busStops[currentBusStop].nr[currentBusStopNrIndex], freshData);
+      if (!fetchFailed) globalSchedules = freshData;
       WiFi.disconnect(true);
       WiFi.mode(WIFI_OFF);
   } 
@@ -274,7 +275,7 @@ void refreshLogic() {
     display.fillScreen(GxEPD_WHITE);
     if (displayList.empty()) {
        u8g2.setFont(u8g2_font_helvB18_te);
-       displayTextOnCenterHorizontally("Brak odjazdów", schedulesY + 50);
+       displayTextOnCenterHorizontally(fetchFailed ? "Brak połączenia" : "Brak odjazdów", schedulesY + 50);
     } else {
        displayBusStopSchedule(schedulesY, displayList);
     }

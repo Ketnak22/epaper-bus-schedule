@@ -8,8 +8,8 @@ struct ScheduleEntry {
     String time; // "HH:MM"
 };
 
-// Network Fetch
-std::vector<ScheduleEntry> fetchScheduleFromServer(const String& busStopId, const String& busStopNr);
+// Network Fetch, returns false if the data could not be fetched
+bool fetchScheduleFromServer(const String& busStopId, const String& busStopNr, std::vector<ScheduleEntry> &schedules);
 
 // Removes buses from the vector that have already departed (based on current time)
 void removePastSchedules(std::vector<ScheduleEntry> &schedules);

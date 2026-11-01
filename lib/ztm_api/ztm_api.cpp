@@ -2,6 +2,7 @@
 #include "secrets.h"
 
 #include <HTTPClient.h>
+#include <WiFi.h>
 #include <WiFiClient.h>
 #include <ArduinoJson.h>
 #include <algorithm> // for std::remove_if
@@ -9,7 +10,7 @@
 // Helper to get current minutes from midnight
 int getCurrentMinutes() {
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) return -1;
+    if (!getLocalTime(&timeinfo, 0)) return -1;
     return timeinfo.tm_hour * 60 + timeinfo.tm_min;
 }
 
@@ -20,18 +21,30 @@ int parseTimeStr(String timeStr) {
     return h * 60 + m;
 }
 
-std::vector<ScheduleEntry> fetchScheduleFromServer(const String& busStopId, const String& busStopNr) {
-    std::vector<ScheduleEntry> schedules;
+static const int MINUTES_PER_DAY = 1440;
+// A departure further back than this counts as tomorrow's
+static const int MAX_MINUTES_PAST = 120;
 
-    if (WiFi.status() != WL_CONNECTED) return schedules;
+// Helper: Minutes until a departure, negative if it already left.
+// ZTM writes night departures past 24:00 (up to 29:02), so wrap around the day.
+int minutesUntil(const ScheduleEntry &entry, int currentMins) {
+    int diff = (parseTimeStr(entry.time) - currentMins + MAX_MINUTES_PAST) % MINUTES_PER_DAY;
+    if (diff < 0) diff += MINUTES_PER_DAY;
+    return diff - MAX_MINUTES_PAST;
+}
+
+bool fetchScheduleFromServer(const String& busStopId, const String& busStopNr, std::vector<ScheduleEntry> &schedules) {
+    schedules.clear();
+
+    if (WiFi.status() != WL_CONNECTED) return false;
 
     int currentMins = getCurrentMinutes();
-    if (currentMins == -1) return schedules;
+    if (currentMins == -1) return false;
 
-    HTTPClient http;
     WiFiClient client;
+    HTTPClient http;
 
-    // Call your Python API
+    // Request goes to the middleware, not the ZTM API
     String url = String(SERVER_URL) + "/get_stop_schedule" + 
                  "?busStopId=" + busStopId + 
                  "&busStopNr=" + busStopNr + 
@@ -40,6 +53,7 @@ std::vector<ScheduleEntry> fetchScheduleFromServer(const String& busStopId, cons
     http.setTimeout(5000); 
     http.begin(client, url);
 
+    bool success = false;
     int httpCode = http.GET();
     if (httpCode == HTTP_CODE_OK) {
         String payload = http.getString();
@@ -47,12 +61,13 @@ std::vector<ScheduleEntry> fetchScheduleFromServer(const String& busStopId, cons
         DeserializationError error = deserializeJson(doc, payload);
 
         if (!error) {
+            success = true;
             JsonArray arr = doc.as<JsonArray>();
             for (JsonObject obj : arr) {
                 ScheduleEntry entry;
                 entry.line = obj["linia"].as<String>();
                 entry.direction = obj["kierunek"].as<String>();
-                // Python sends "16:41:00", we want "16:41"
+                // Middleware sends "16:41:00", keep "16:41"
                 String fullTime = obj["czas"].as<String>();
                 entry.time = fullTime.substring(0, 5); 
                 schedules.push_back(entry);
@@ -61,7 +76,7 @@ std::vector<ScheduleEntry> fetchScheduleFromServer(const String& busStopId, cons
         }
     }
     http.end();
-    return schedules;
+    return success;
 }
 
 void removePastSchedules(std::vector<ScheduleEntry> &schedules) {
@@ -70,14 +85,7 @@ void removePastSchedules(std::vector<ScheduleEntry> &schedules) {
 
     // Use erase-remove idiom to filter vector in place
     schedules.erase(std::remove_if(schedules.begin(), schedules.end(), [currentMins](const ScheduleEntry &entry) {
-        int busMins = parseTimeStr(entry.time);
-        int diff = busMins - currentMins;
-        
-        if (diff > 1000) return false; // Future (Midnight wrap)
-        if (diff < -1000) return false; // Future (Midnight wrap)
-
-        // Remove if passed more than 1 minute ago
-        return diff < -1; 
+        return minutesUntil(entry, currentMins) < 0;
     }), schedules.end());
 }
 
@@ -88,15 +96,7 @@ std::vector<ScheduleEntry> convertScheduleTimesToMinutesLeft(const std::vector<S
 
     for (const auto &entry : schedules) {
         ScheduleEntry newEntry = entry;
-        int busMins = parseTimeStr(entry.time);
-        int diff = busMins - currentMins;
-      
-        
-        if (diff > 1000) { 
-             // Special case: Bus 24:10 (1450), Current 00:05 (5). Diff = 1445.
-             // Real diff is 5 minutes.
-             diff = diff - 1440; 
-        }
+        int diff = minutesUntil(entry, currentMins);
 
         if (diff > 1) {
              newEntry.time = String(diff) + " min";
