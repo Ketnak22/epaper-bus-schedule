@@ -50,7 +50,7 @@ bool fetchScheduleFromServer(const String& busStopId, const String& busStopNr, s
                  "&busStopNr=" + busStopNr + 
                  "&currentTimeInMinutes=" + String(currentMins);
 
-    http.setTimeout(5000); 
+    http.setTimeout(15000);
     http.begin(client, url);
 
     bool success = false;
