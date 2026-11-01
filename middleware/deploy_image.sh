@@ -10,6 +10,9 @@ REMOTE_PATH="/tmp"
 IMAGE_NAME="bus-stop-middleware:latest"
 TAR_NAME="bus-stop-middleware_latest.tar.gz"
 
+# Build from the script's folder, wherever it was called from
+cd "$(dirname "$0")"
+
 # Build image
 docker build -t "${IMAGE_NAME}" .
 
