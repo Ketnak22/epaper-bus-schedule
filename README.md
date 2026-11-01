@@ -23,11 +23,7 @@ busy stop. The closer to the city centre, the more departures a stop has, and
 the full response is too big to parse on the device. So the heavy work is
 moved to a server, and the microcontroller only gets a short, ready list.
 
-```mermaid
-flowchart LR
-    A[ESP8266] -->|HTTP| B[middleware]
-    B -->|HTTPS| C[ZTM API]
-```
+![ESP8266 → middleware → ZTM API data flow](docs/diagram.svg)
 
 ## Hardware
 

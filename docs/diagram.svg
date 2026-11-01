@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="100" viewBox="0 0 680 100" role="img" aria-label="ESP8266 sends data over HTTP to a middleware, which calls the ZTM API over HTTPS">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+    .box { fill: #161b22; stroke: #30363d; stroke-width: 1; }
+    .name { fill: #e6edf3; font-size: 14px; font-weight: 600; }
+    .line { stroke: #8b949e; stroke-width: 1.5; fill: none; }
+    .head { fill: none; stroke: #8b949e; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .tag { font-size: 12px; font-weight: 600; }
+    .http-bg { fill: rgba(187,128,9,0.15); stroke: #9e6a03; stroke-width: 1; }
+    .http-fg { fill: #d29922; }
+    .https-bg { fill: rgba(46,160,67,0.15); stroke: #238636; stroke-width: 1; }
+    .https-fg { fill: #3fb950; }
+    @media (prefers-color-scheme: light) {
+      .box { fill: #f6f8fa; stroke: #d0d7de; }
+      .name { fill: #1f2328; }
+      .line { stroke: #656d76; }
+      .head { stroke: #656d76; }
+      .http-bg { fill: #fff8c5; stroke: #d4a72c; }
+      .http-fg { fill: #7d4e00; }
+      .https-bg { fill: #dafbe1; stroke: #4ac26b; }
+      .https-fg { fill: #1a7f37; }
+    }
+  </style>
+
+  <rect class="box" x="40" y="26" width="140" height="48" rx="6"/>
+  <text class="name" x="110" y="50" text-anchor="middle" dominant-baseline="central">ESP8266</text>
+
+  <rect class="box" x="270" y="26" width="140" height="48" rx="6"/>
+  <text class="name" x="340" y="50" text-anchor="middle" dominant-baseline="central">middleware</text>
+
+  <rect class="box" x="500" y="26" width="140" height="48" rx="6"/>
+  <text class="name" x="570" y="50" text-anchor="middle" dominant-baseline="central">ZTM API</text>
+
+  <line class="line" x1="184" y1="50" x2="201" y2="50"/>
+  <line class="line" x1="249" y1="50" x2="264" y2="50"/>
+  <path class="head" d="M259 45L265 50L259 55"/>
+  <rect class="http-bg" x="201" y="39" width="48" height="22" rx="11"/>
+  <text class="tag http-fg" x="225" y="50" text-anchor="middle" dominant-baseline="central">HTTP</text>
+
+  <line class="line" x1="414" y1="50" x2="427" y2="50"/>
+  <line class="line" x1="483" y1="50" x2="494" y2="50"/>
+  <path class="head" d="M489 45L495 50L489 55"/>
+  <rect class="https-bg" x="427" y="39" width="56" height="22" rx="11"/>
+  <text class="tag https-fg" x="455" y="50" text-anchor="middle" dominant-baseline="central">HTTPS</text>
+</svg>
