@@ -93,13 +93,17 @@ The stops are listed in `busStops` in `src/main.cpp`.
 
 ### Adding a stop
 
-Find the stop in the `dbtimetable_get` resource on
-[api.um.warszawa.pl](https://api.um.warszawa.pl). It gives the stop ID
-(`busStopId`) and the platform numbers (`busStopNr`, like `01`). Add an entry to
-`busStops` and raise the size of the `std::array` by one:
+The easiest way to get the stop ID is the
+[WTP timetable page](https://www.wtp.waw.pl/rozklady-jazdy/?wtp_dt=2026-11-01&wtp_md=1).
+Find the stop and copy the number shown above its name, for example
+`Przystanek 2143` for Afrykańska. The same number is `wtp_st` in the address of
+the stop's page. The platform numbers are in the names below it (`Afrykańska 01`,
+`Afrykańska 02`). They are the `busStopId` and `busStopNr` of the
+`dbtimetable_get` resource on [api.um.warszawa.pl](https://api.um.warszawa.pl).
+Add an entry to `busStops` and raise the size of the `std::array` by one:
 
 ```cpp
-{"1234", {"01", "02"}, "Stop name"},
+{"2143", {"01", "02"}, "Afrykańska"},
 ```
 
 ## Controls
