@@ -2,6 +2,7 @@
 #include <vector>
 #include <array>
 #include <ESP8266WiFi.h>
+#include <coredecls.h>
 #include <time.h>
 #include <Encoder.h>
 #include <ezButton.h>
@@ -54,8 +55,11 @@ String changingBusStopName = "";
 
 const int FULL_REFRESH_THRESHOLD = 60; 
 
-const char *ntpServer = "pool.ntp.org";
+const char *ntpServer = "pl.pool.ntp.org";
+const char *ntpServerFallback = "pool.ntp.org";
+// Poland: CET, CEST from the last Sunday of March to the last Sunday of October
 const char *tzInfo = "CET-1CEST,M3.5.0,M10.5.0/3";
+volatile bool ntpSynced = false;
 
 #define ENABLE_GxEPD2_display 0
 #include <GxEPD2_BW.h>
@@ -93,6 +97,8 @@ void enterDeepSleep(); // Logic to turn off
 void setup() {
   // Don't rewrite the flash on every WiFi.begin
   WiFi.persistent(false);
+
+  settimeofday_cb([](bool fromSntp) { if (fromSntp) ntpSynced = true; });
 
   // TX only, RX is the encoder button
   Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
@@ -331,12 +337,13 @@ void connectToWifi(bool silent) {
 
 void syncTime(bool silent) {
   if (!silent) showStatusMessage("Synchronizacja Czasu...");
-  configTime(0, 0, ntpServer);
-  setenv("TZ", tzInfo, 1);
-  tzset();
-  struct tm t;
+  ntpSynced = false;
+  // The TZ rule switches summer and winter time by itself.
+  // The old configTime(0, 0, ...) overload overwrites it with plain GMT.
+  configTime(tzInfo, ntpServer, ntpServerFallback);
+  // A clock set by an earlier sync is valid already, so wait for a fresh reply
   int r = 0;
-  while (!getLocalTime(&t, 100) && r < 20) { r++; delay(100); }
+  while (!ntpSynced && r < 50) { r++; delay(100); }
 }
 
 
