@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# AI Slop but it works
-
 # Config
 REMOTE_USER="root"
-REMOTE_HOST="192.168.33.203"
+REMOTE_HOST="${REMOTE_HOST:?Set REMOTE_HOST to the address of the target machine}"
 REMOTE_PATH="/tmp"
 IMAGE_NAME="bus-stop-middleware:latest"
 TAR_NAME="bus-stop-middleware_latest.tar.gz"
