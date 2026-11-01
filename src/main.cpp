@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <vector>
 #include <array>
-#include <WiFi.h>
+#include <ESP8266WiFi.h>
 #include <time.h>
 #include <Encoder.h>
 #include <ezButton.h>
@@ -11,16 +11,15 @@
 
 #include <U8g2_for_Adafruit_GFX.h>
 
-// Pin Declarations
-static const uint8_t EPD_BUSY = 21;
-static const uint8_t EPD_CS = 5;
-static const uint8_t EPD_RST = 7;
-static const uint8_t EPD_DC = 6;
-static const uint8_t EPD_SCK = 8;
-static const uint8_t EPD_MOSI = 10;
-static const uint8_t RT_CLK = 4;
-static const uint8_t RT_DW = 3;
-static const uint8_t RT_SW = 2;
+// Pin Declarations (Wemos D1 mini, GPIO numbers)
+// SCK (D5) and MOSI (D7) are fixed by the hardware SPI
+static const uint8_t EPD_BUSY = 16; // D0
+static const uint8_t EPD_CS = 15;   // D8, must be low on boot
+static const uint8_t EPD_RST = 2;   // D4, must be high on boot
+static const uint8_t EPD_DC = 12;   // D6
+static const uint8_t RT_CLK = 5;    // D1
+static const uint8_t RT_DW = 4;     // D2
+static const uint8_t RT_SW = 3;     // RX, free because Serial is TX only
 
 Encoder encoder(RT_CLK, RT_DW);
 int prevEncoderPos = 0;
@@ -61,7 +60,7 @@ const char *tzInfo = "CET-1CEST,M3.5.0,M10.5.0/3";
 #define ENABLE_GxEPD2_display 0
 #include <GxEPD2_BW.h>
 
-GxEPD2_BW<GxEPD2_420_GDEY042T81, GxEPD2_420_GDEY042T81::HEIGHT> display(GxEPD2_420_GDEY042T81(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
+GxEPD2_BW<GxEPD2_420_GDEY042T81, GxEPD2_420_GDEY042T81::HEIGHT / 2> display(GxEPD2_420_GDEY042T81(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 U8G2_FOR_ADAFRUIT_GFX u8g2;
 
 // Layout Constants
@@ -92,12 +91,17 @@ void confirmBusStopChange();
 void enterDeepSleep(); // Logic to turn off
 
 void setup() {
-  Serial.begin(115200);
+  // Don't rewrite the flash on every WiFi.begin
+  WiFi.persistent(false);
+
+  // TX only, RX is the encoder button
+  Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
+  pinMode(RT_SW, INPUT_PULLUP);
 
   encoderBtn.setDebounceTime(BUTTON_DEBOUNCE_MS);
 
-  SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);
-  display.init(115200, true, 50, false);
+  // 0 keeps GxEPD2 from reopening Serial with RX
+  display.init(0, true, 50, false);
   u8g2.begin(display);
   u8g2.setFontMode(1);
   u8g2.setBackgroundColor(GxEPD_WHITE);
@@ -239,8 +243,8 @@ void enterDeepSleep() {
     Serial.println("Entering Deep Sleep.");
     Serial.flush(); 
     
-    esp_deep_sleep_enable_gpio_wakeup(1ULL << RT_SW, ESP_GPIO_WAKEUP_GPIO_LOW);
-    esp_deep_sleep_start();
+    // Only the RST pin wakes an ESP8266 from this
+    ESP.deepSleep(0);
 }
 
 void refreshLogic() {

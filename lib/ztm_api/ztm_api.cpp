@@ -1,8 +1,8 @@
 #include "ztm_api.h"
 #include "secrets.h"
 
-#include <HTTPClient.h>
-#include <WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ArduinoJson.h>
 #include <algorithm> // for std::remove_if
