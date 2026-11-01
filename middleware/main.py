@@ -1,3 +1,6 @@
+from os import getenv
+
+from mock_data import get_mock_schedule
 from ztm_api import ZtmApiError, get_stop_schedule_all_lines
 
 from fastapi import FastAPI, HTTPException
@@ -17,9 +20,13 @@ def minutes_until(time_str: str, current_time_in_minutes: int) -> int:
 
 @app.get("/get_stop_schedule")
 def get_stop_schedule(busStopId: str, busStopNr: str, currentTimeInMinutes: int):
-    try:
-        schedules = get_stop_schedule_all_lines(busStopId, busStopNr)
-    except ZtmApiError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    # Demo mode, needs neither the API key nor the internet
+    if getenv("MOCK") == "1":
+        schedules = get_mock_schedule(currentTimeInMinutes)
+    else:
+        try:
+            schedules = get_stop_schedule_all_lines(busStopId, busStopNr)
+        except ZtmApiError as e:
+            raise HTTPException(status_code=502, detail=str(e))
     schedules = sorted(schedules, key=lambda x: minutes_until(x['czas'], currentTimeInMinutes))
     return schedules[:MAX_SCHEDULES]
