@@ -26,6 +26,7 @@ Encoder encoder(RT_CLK, RT_DW);
 int prevEncoderPos = 0;
 
 ezButton encoderBtn(RT_SW);
+static const unsigned long BUTTON_DEBOUNCE_MS = 50;
 
 // Track button holding time
 unsigned long buttonPressStart = 0;
@@ -87,10 +88,13 @@ void displayTextOnCenterHorizontally(const String &text, const int y);
 void displayTextOnCenter(const String &text);
 void showStatusMessage(const String &text);
 void refreshLogic();
+void confirmBusStopChange();
 void enterDeepSleep(); // Logic to turn off
 
 void setup() {
   Serial.begin(115200);
+
+  encoderBtn.setDebounceTime(BUTTON_DEBOUNCE_MS);
 
   SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);
   display.init(115200, true, 50, false);
@@ -136,7 +140,7 @@ void loop() {
   }
 
   // Handle Button Release
-  if (encoderBtn.isReleased()) {
+  if (encoderBtn.isReleased() && buttonPressStart != 0) {
     long duration = millis() - buttonPressStart;
     buttonPressStart = 0; // Reset timer
 
@@ -145,33 +149,20 @@ void loop() {
       
       // 1s - 6s
       if (duration >= 1000) {
-         changeStopMode = !changeStopMode;
-         
          if (changeStopMode) {
+           confirmBusStopChange();
+         } else {
            // Enter Change Mode
+           changeStopMode = true;
            changingBusStop = currentBusStop;
            drawBackground(false, true);
-         } else {
-           // Exit Change Mode (Save & Refresh)
-           currentBusStop = changingBusStop;
-           globalSchedules.clear(); 
-           currentBusStopNrIndex = 0;
-           refreshCounter = 1;
-           drawBackground(false, false);
-           refreshLogic();
          }
       }
       // < 1s
       else {
         if (changeStopMode) {
            // If in Change Mode: Short click CONFIRMS selection
-           changeStopMode = false;
-           currentBusStop = changingBusStop;
-           globalSchedules.clear(); 
-           currentBusStopNrIndex = 0;
-           refreshCounter = 1;
-           drawBackground(false, false);
-           refreshLogic();
+           confirmBusStopChange();
         } else {
            currentBusStopNrIndex++;
            if (currentBusStopNrIndex >= busStops[currentBusStop].nr.size()) {
@@ -180,7 +171,6 @@ void loop() {
            
            // Clear data and refresh
            globalSchedules.clear();
-           refreshCounter = 1;
           //  showStatusMessage("Zmiana numeru...");
            drawBackground(false, false);
            refreshLogic();
@@ -193,12 +183,11 @@ void loop() {
   long newPosition = encoder.read() / 4;
   if (changeStopMode) {
     if (newPosition != prevEncoderPos) {
-      if (newPosition > prevEncoderPos) {
-          changingBusStop = (changingBusStop + 1) % busStops.size();
-      } else {
-          changingBusStop = (changingBusStop - 1 + busStops.size()) % busStops.size();
-      }
-    
+      // Move by the whole difference, detents add up while the display redraws
+      int stopCount = busStops.size();
+      int steps = (newPosition - prevEncoderPos) % stopCount;
+      changingBusStop = (changingBusStop + steps + stopCount) % stopCount;
+
       Serial.printf("Encoder position: %d. New stop: %s\n", (int)newPosition, busStops[changingBusStop].name.c_str());
       prevEncoderPos = newPosition;
       
@@ -216,6 +205,16 @@ void loop() {
     previousRefreshMillis = currentMillis; 
     refreshLogic();
   }
+}
+
+// Exit Change Mode (Save & Refresh)
+void confirmBusStopChange() {
+  changeStopMode = false;
+  currentBusStop = changingBusStop;
+  globalSchedules.clear();
+  currentBusStopNrIndex = 0;
+  drawBackground(false, false);
+  refreshLogic();
 }
 
 void enterDeepSleep() {
