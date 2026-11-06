@@ -1,5 +1,7 @@
 # E-Paper Bus Schedule
 
+[![CI](https://github.com/Ketnak22/epaper-bus-schedule/actions/workflows/ci.yml/badge.svg)](https://github.com/Ketnak22/epaper-bus-schedule/actions/workflows/ci.yml)
+
 <table>
   <tr>
     <td><img src="docs/photo.jpg" width="400" alt="The device from the front, screen showing departures from Saska 01 with line 520 leaving now"></td>
