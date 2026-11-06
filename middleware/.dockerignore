@@ -1,5 +1,4 @@
 .env
-bus_stop_data_server_esp32
 __pycache__
 *.tar.gz
 .dockerignore
