@@ -134,3 +134,6 @@ In stop selection:
 
 Departures load about a second after you stop turning the encoder. The last
 stop and number are saved in flash, so they come back after a restart.
+
+## License
+See [LICENSE](LICENSE).
