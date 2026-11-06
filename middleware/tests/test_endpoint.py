@@ -48,3 +48,13 @@ def test_result_is_limited_and_sorted(monkeypatch):
     assert len(body) == MAX_SCHEDULES
     assert waits == sorted(waits)
     assert body[0]["czas"] == "10:00:00"
+
+def test_health(monkeypatch):
+    def fail(*args):
+        raise AssertionError("ZTM API called by the health check")
+
+    monkeypatch.setattr(main, "get_stop_schedule_all_lines", fail)
+
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}

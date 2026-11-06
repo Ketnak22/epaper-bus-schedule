@@ -18,6 +18,11 @@ def convert_time_to_int(time_str: str) -> int:
 def minutes_until(time_str: str, current_time_in_minutes: int) -> int:
     return (convert_time_to_int(time_str) - current_time_in_minutes) % MINUTES_PER_DAY
 
+# For Docker and uptime checks, doesn't call the ZTM API
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.get("/get_stop_schedule")
 def get_stop_schedule(busStopId: str, busStopNr: str, currentTimeInMinutes: int):
     # Demo mode, needs neither the API key nor the internet
