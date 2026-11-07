@@ -37,9 +37,16 @@ the parsing and sorting, and the board gets a short list it can use as is.
 
 ## Hardware
 
+### Parts
+
 - Wemos D1 mini (ESP8266)
-- GDEY042T81 4.2" e-paper display
+- GDEY042T81 4.2" black and white e-paper display (SPI)
 - Rotary encoder with a push button
+- Jumper wires
+- USB cable and a 5 V USB power supply
+- Foam board and hot glue for the enclosure
+
+### Wiring
 
 | Signal      | D1 mini | GPIO | Notes                              |
 | ----------- | ------- | ---- | ---------------------------------- |
