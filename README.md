@@ -109,6 +109,9 @@ The stops are listed in `busStops` in `src/main.cpp`.
 
 ### Adding a stop
 
+I hardcoded the stops in code, so adding one means rebuilding and flashing
+the firmware.
+
 I get stop IDs from the
 [WTP timetable page](https://www.wtp.waw.pl/rozklady-jazdy/?wtp_dt=2026-11-01&wtp_md=1).
 Find the stop and copy the number shown above its name, for example
